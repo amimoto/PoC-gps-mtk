@@ -9,8 +9,12 @@ main();
 
 sub main {
 # --------------------------------------------------
-    my $gps = GPS::MTK->new();
-    $gps->fetch;
+    my $gps = GPS::MTK->new( 
+                    comm_port_fpath => '/dev/rfcomm4'
+                );
+    while (1) {
+        $gps->loop(1);
+    }
 }
 
 
