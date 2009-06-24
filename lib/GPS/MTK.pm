@@ -40,6 +40,7 @@ sub loop {
 # If there is an event, we just send it to the event 
 # engine as required.
             if ( $l ) {
+		print $l;
                 $event_obj->event($l);
             }
             elsif ( not $blocking ) {
