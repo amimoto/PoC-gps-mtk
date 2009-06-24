@@ -40,7 +40,6 @@ sub loop {
 # If there is an event, we just send it to the event 
 # engine as required.
             if ( $l ) {
-		print $l;
                 $event_obj->event($l);
             }
             elsif ( not $blocking ) {
@@ -136,12 +135,32 @@ sub event_obj {
 # --------------------------------------------------
     my $self = shift;
     return $self->{event_obj} ||= do {
+# Need to load the class. Okedoke
         my $event_class = $self->{event_class};
         return unless $event_class =~ /^\w+(?:::\w+)*$/; # TODO ERROR MESSAGE
         eval "require $event_class";
+        $@ and die "Could not compile $event_class because '$@'";
         my $event_obj = $event_class->new;
+
+# Rack our event handlers
+        $event_obj->hook_register('_default',\&_event_default);
+        $event_obj->hook_register('_error',\&_event_error);
+
         $event_obj;
     };
 }
+
+sub _event_default {
+# --------------------------------------------------
+    my ($line,$cb_args,$code,$elements) = @_;
+    print "[$line]\n";
+}
+
+sub _event_error {
+# --------------------------------------------------
+    my ($line,$cb_args,$error_msg) = @_;
+    warn "$line\n    - $error_msg\n";
+}
+
 
 1;

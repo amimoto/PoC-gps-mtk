@@ -29,10 +29,11 @@ sub event {
 
 # Handle the checksum
     my $checksum_str = $line;
-    $checkstr_str  =~ s/\*([0-9a-f]{2})$//i or return $self->event_error($line,$cb_args,"NOCHECKSUM");
+    $checksum_str  =~ s/\*([0-9a-f]{2})$//i or return $self->event_error($line,$cb_args,"NOCHECKSUM");
     my $checksum = $1;
-    if ( GPS::MTK::NMEA->checksum($checksum_str) ne $checksum ) {
-        $self->event_error($line,$cb_args,"CHECKSUMFAIL");
+    my $checksum_calc = GPS::MTK::NMEA->checksum($checksum_str);
+    if ( $checksum_calc ne $checksum ) {
+        $self->event_error($line,$cb_args,"CHECKSUMFAIL : $checksum_calc vs $checksum");
     }
 
 # Not an error, we hand off to the trigger event
@@ -45,7 +46,7 @@ sub event_error {
 #
     my ( $self, $line, $cb_args, $error_msg ) = @_;
     my $func = $self->hook_current('_error') or return;
-    return $func->($line,$cb_args,$error_msg):
+    return $func->($line,$cb_args,$error_msg);
 }
 
 sub event_trigger {
@@ -66,8 +67,8 @@ sub hook_current {
 # for the hook code requested
 #
     my ( $self, $code ) = @_;
-    my $hooks = $events->{lc $code};
-    @$hooks or return;
+    my $hooks = $self->{events}{lc $code};
+    $hooks and @$hooks or return;
     return $hooks->[-1];
 };
 
@@ -77,7 +78,7 @@ sub hook_register {
 # for a particular type of event
 #
     my ( $self, $code, $callback ) = @_;
-    push @{$events->{lc $code}}, $callback;
+    push @{$self->{events}{lc $code}}, $callback;
 }
 
 sub hook_unregister {
@@ -89,7 +90,7 @@ sub hook_unregister {
 # again.
 #
     my ( $self, $code ) = @_;
-    pop @{$events->{lc $code}};
+    pop @{$self->{events}{lc $code}};
 }
 
 1;

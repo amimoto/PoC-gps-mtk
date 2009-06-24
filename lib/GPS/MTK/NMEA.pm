@@ -10,7 +10,8 @@ sub checksum {
     my ($self,$line) = @_;
     my $c = 0;
     my @e = split //, $line;
-    for ( 1..@e-1 ) {
+    shift @e; # get rid of the $
+    for ( @e ) {
         $c ^= ord( $_ );
     }
     return sprintf '%02X', $c;
