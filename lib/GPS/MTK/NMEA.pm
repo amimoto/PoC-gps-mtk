@@ -2,6 +2,7 @@ package GPS::MTK::NMEA;
 
 use strict;
 use bytes;
+use GPS::MTK::Constants qw/:all/;
 
 sub checksum {
 # --------------------------------------------------
@@ -29,5 +30,24 @@ sub dms_to_decimal {
     }
     return sprintf("%.05f",$degrees);
 }
+
+sub log_format_parse {
+# --------------------------------------------------
+# Returns an array of what log elements are in
+# each record
+#
+    my ( $self, $log_format ) = @_;
+
+    my $i = 0;
+    my @log_elements;
+    for my $k ( @{LOG_STORAGE_FORMAT_KEYS()} ){
+        if ( $log_format & 2**($i++) ) {
+            push @log_elements, $k;
+        }
+    }
+
+    return \@log_elements;
+}
+
 
 1;

@@ -124,27 +124,10 @@ sub log_parse_header {
     };
 
 # What's the log format look like?
-    $header_info->{log_format_elements} = $self->log_parse_format($header_info->{log_format   });
+    require GPS::MTK::NMEA;
+    $header_info->{log_format_elements} = GPS::MTK::NMEA->log_format_parse($header_info->{log_format   });
 
     return $header_info;
-}
-
-sub log_parse_format {
-# --------------------------------------------------
-# Returns an array of what log elements are in
-# each record
-#
-    my ( $self, $log_format ) = @_;
-
-    my $i = 0;
-    my @log_elements;
-    for my $k ( @{LOG_STORAGE_FORMAT_KEYS()} ){
-        if ( $log_format & 2**($i++) ) {
-            push @log_elements, $k;
-        }
-    }
-
-    return \@log_elements;
 }
 
 sub log_parse_sector {

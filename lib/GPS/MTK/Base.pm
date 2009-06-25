@@ -189,7 +189,7 @@ sub copy_struct {
                 map { ref $_ ? copy_struct($_) : $_ } @$s
             ];
         }
-        die "Cannot copy struct!";
+        die "Cannot copy struct! : ".ref($s);
     }
 
     return $s;
