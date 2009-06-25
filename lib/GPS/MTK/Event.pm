@@ -21,16 +21,17 @@ sub event {
 # comma delimited
     $line =~ s/^\s*|\s*$//g;
     return unless $line;
-    my @e = split /,/, $line;
-
-# Now handle the event code
-    my $code = shift @e;
-    return $self->event_error($line,$cb_args,"NOTNMEA") unless $code and $code =~ s/^\$//;
 
 # Handle the checksum
     my $checksum_str = $line;
     $checksum_str  =~ s/\*([0-9a-f]{2})$//i or return $self->event_error($line,$cb_args,"NOCHECKSUM");
     my $checksum = $1;
+    my @e = split /,/, $checksum_str;
+
+# Now handle the event code
+    my $code = shift @e;
+    return $self->event_error($line,$cb_args,"NOTNMEA") unless $code and $code =~ s/^\$//;
+
     my $checksum_calc = GPS::MTK::NMEA->checksum($checksum_str);
     if ( $checksum_calc ne $checksum ) {
         $self->event_error($line,$cb_args,"CHECKSUMFAIL : $checksum_calc vs $checksum");
@@ -67,8 +68,12 @@ sub hook_current {
 # for the hook code requested
 #
     my ( $self, $code ) = @_;
+
+
     my $hooks = $self->{events}{lc $code};
+
     $hooks and @$hooks or return;
+
     return $hooks->[-1];
 };
 
@@ -78,7 +83,7 @@ sub hook_register {
 # for a particular type of event
 #
     my ( $self, $code, $callback ) = @_;
-    push @{$self->{events}{lc $code}}, $callback;
+    push @{$self->{events}{lc $code}||=[]}, $callback;
 }
 
 sub hook_unregister {

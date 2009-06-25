@@ -9,8 +9,8 @@ sub checksum {
 #
     my ($self,$line) = @_;
     my $c = 0;
+    $line =~ s/^\$//;
     my @e = split //, $line;
-    shift @e; # get rid of the $
     for ( @e ) {
         $c ^= ord( $_ );
     }
