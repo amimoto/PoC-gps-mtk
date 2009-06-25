@@ -56,4 +56,13 @@ sub getline {
     return ( $io_handle->getline || '' );
 }
 
+sub printflush {
+# --------------------------------------------------
+# Send a single line of data to the device
+#
+    my ( $self, $line ) = @_;
+    my $io_handle = $self->{io_handle} or return;
+    return $io_handle->printflush($line);
+}
+
 1;

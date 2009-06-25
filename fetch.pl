@@ -14,6 +14,7 @@ sub main {
                     comm_port_fpath => '/dev/rfcomm4',
                     log_dump_fpath  => '/tmp/gps.log',
                 );
+    $gps->gps_info;
     while (1) {
         $gps->loop(1);
     }

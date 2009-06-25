@@ -37,6 +37,28 @@ use GPS::MTK::Base
 # The core interface functions
 ####################################################
 
+sub gps_info {
+# --------------------------------------------------
+# Queries the GPS for its hardware implementation
+# information
+#
+    my ( $self ) = @_;
+
+# clear out any pending data
+    $self->loop; 
+
+# Figure out what type of device this is
+    $self->gps_send_wait( 'PMTK605', [], 'PMTK705', sub {
+            my ($line,$self,$code,$elements) = @_;
+            my $gps_info = $self->{gps_state}{gps_info} ||= {};
+            $gps_info->{firmware} = shift @$elements;
+            $gps_info->{model_id} = shift @$elements;
+            $gps_info->{device} = join " ", @$elements;
+        } );
+
+    use Data::Dumper; die Dumper $self;
+}
+
 sub loop {
 # --------------------------------------------------
 # Just iterate and keep downloading NMEA strings
@@ -64,12 +86,74 @@ sub loop {
                 last;
             }
 
-            use Data::Dumper; warn Dumper $self->{gps_state};
-
         } while ( defined $line );
     };
 
     return;
+}
+
+sub gps_send {
+# --------------------------------------------------
+# sends a single query to the GPS
+#
+    my ( $self, $code, $elements ) = @_;
+    require GPS::MTK::NMEA;
+    my $base_string = join ",", uc($code), @$elements;
+    my $checksum    = GPS::MTK::NMEA->checksum($base_string);
+    my $nmea_string = '$' . $base_string . "*$checksum\r\n";
+    my $io_obj      = $self->io_obj or return;
+    return $io_obj->printflush($nmea_string);
+}
+
+sub gps_wait {
+# --------------------------------------------------
+# This will block until the requested code is found
+#
+    my ( $self, $code_wait ) = @_;
+
+    my $io_obj    = $self->io_obj or return;
+    my $event_obj = $self->event_obj or return;
+    $code_wait    = uc($code_wait);
+    my $line;
+
+    $io_obj->blocking(1);
+    while (1) {
+        $line = $io_obj->getline();
+        defined $line or last;
+        $line =~ s/[\n\r]*$//;
+        $line or next;
+
+# If there is an event, we just send it to the event 
+# engine as required.
+        $self->nmea_string_log($line);
+        $event_obj->event($line,$self);
+
+# Now check to see if the event matches our wait code
+        my @e = split /,/, $line;
+        my $code = shift @e;
+        $code =~ s/^\$//;
+        if ( $code eq $code_wait ) {
+            last;
+        };
+    };
+
+    return 1;
+}
+
+sub gps_send_wait {
+# --------------------------------------------------
+# This will send a string to the GPS then wait for 
+# for a particular code and trigger the appropriate
+# callback if defined
+#
+    my ( $self, $code, $elements, $code_wait, $callback ) = @_;
+    my $event_obj = $self->event_obj or return;
+    $self->gps_send( $code, $elements );
+    $callback and $event_obj->hook_register( $code_wait, $callback );
+    $self->gps_wait($code_wait);
+    warn "FINISHED WAIT\n";
+    $callback and $event_obj->hook_unregister( $code_wait );
+    return 1;
 }
 
 sub config {
@@ -167,6 +251,8 @@ sub event_obj {
         $event_obj->hook_register('_error',\&_event_error);
         $event_obj->hook_register('gprmc',\&_event_gps_gprmc);
         $event_obj->hook_register('gpgga',\&_event_gps_gpgga);
+        $event_obj->hook_register('gpgsa',\&_event_gps_gpgsa);
+        $event_obj->hook_register('gpgsv',\&_event_gps_gpgsv);
 
         $event_obj;
     };
@@ -177,7 +263,7 @@ sub _event_default {
 # The default event handler
 #
     my ($line,$cb_args,$code,$elements) = @_;
-    print "[$line]\n";
+    print "$code => [$line]\n";
 }
 
 sub _event_error {
@@ -219,16 +305,16 @@ sub _event_gps_gprmc {
     $utc_time[5] += $utc_time[5] > 70 ? 1900 : 2000;
 
     require GPS::MTK::NMEA;
-    my $location_new = {
-        time_current => \@utc_time,
-        data_status  => $elements->[1],
-        latitude     => GPS::MTK::NMEA->dms_to_decimal( $elements->[2], $elements->[3] ),
-        longitude    => GPS::MTK::NMEA->dms_to_decimal( $elements->[4], $elements->[5] ),
-        speed        => $elements->[7],
-        track        => $elements->[8],
+    my $gps_state_new = {
+        time_current    => \@utc_time,
+        data_status     => $elements->[1],
+        latitude        => GPS::MTK::NMEA->dms_to_decimal( $elements->[2], $elements->[3] ),
+        longitude       => GPS::MTK::NMEA->dms_to_decimal( $elements->[4], $elements->[5] ),
+        speed           => $elements->[6],
+        track_made_good => $elements->[7],
     };
     my $gps_state = $self->{gps_state};
-    @$gps_state{keys %$location_new} = values %$location_new;
+    @$gps_state{keys %$gps_state_new} = values %$gps_state_new;
 
     return;
 }
@@ -258,7 +344,7 @@ sub _event_gps_gpgga {
     my ($line,$self,$code,$elements) = @_;
 
     require GPS::MTK::NMEA;
-    my $location_new = {
+    my $gps_state_new = {
         latitude     => GPS::MTK::NMEA->dms_to_decimal( $elements->[1], $elements->[2] ),
         longitude    => GPS::MTK::NMEA->dms_to_decimal( $elements->[3], $elements->[4] ),
         gps_quality  => $elements->[5],
@@ -270,11 +356,71 @@ sub _event_gps_gpgga {
 
     };
     my $gps_state = $self->{gps_state};
-    @$gps_state{keys %$location_new} = values %$location_new;
+    @$gps_state{keys %$gps_state_new} = values %$gps_state_new;
 
     return;
 }
 
+sub _event_gps_gpgsa {
+# --------------------------------------------------
+# 1    = Mode:
+#        M=Manual, forced to operate in 2D or 3D
+#        A=Automatic, 3D/2D
+# 2    = Mode:
+#        1=Fix not available
+#        2=2D
+#        3=3D
+# 3-14 = IDs of SVs used in position fix (null for unused fields)
+# 15   = PDOP
+# 16   = HDOP
+# 17   = VDOP
+# 
+    my ($line,$self,$code,$elements) = @_;
+
+    my $gps_state_new = {
+        fix_mode => $elements->[0],
+        fix_type => $elements->[1],
+        sv_used  => [ grep $_, @$elements[2..13] ],
+        pdop     => $elements->[14],
+        hdop     => $elements->[15],
+        pdop     => $elements->[16],
+    };
+    my $gps_state = $self->{gps_state};
+    @$gps_state{keys %$gps_state_new} = values %$gps_state_new;
+
+    return;
+}
+
+sub _event_gps_gpgsv {
+# --------------------------------------------------
+# $GPGSV,<1>,<2>,<3>,<4>,<5>,<6>,<7>,...<4>,<5>,<6>,<7>*hh
+# 1) Total number of GSV sentences to be transmitted
+# 2) Number of current GSV sentence
+# 3) Total number of satellites in view, 00 to 12 (leading zeros sent)
+# 4) Satellite PRN number, 01 to 32 (leading zeros sent)
+# 5) Satellite elevation, 00 to 90 degrees (leading zeros sent)
+# 6) Satellite azimuth, 000 to 359 degrees, true (leading zeros sent)
+# 7) Signal to Noise ratio (C/No) 00 to 99 dB, null when not tracking (leading zeros sent)
+#
+    my ($line,$self,$code,$elements) = @_;
+
+    require GPS::MTK::NMEA;
+    my $gps_state = $self->{gps_state};
+    my $sv_id = $elements->[3];
+    $gps_state->{sv}{$sv_id} = {
+        prn          => $sv_id,
+        elevation    => $elements->[4],
+        azimuth      => $elements->[5],
+        signal_noise => $elements->[6],
+    };
+
+    my $gps_state_new = {
+        sv_visible => $elements->[2]
+    };
+    @$gps_state{keys %$gps_state_new} = values %$gps_state_new;
+
+    return;
+}
 
 sub nmea_string_log {
 # --------------------------------------------------
