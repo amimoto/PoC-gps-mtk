@@ -10,6 +10,10 @@ use GPS::MTK::Base
         parser_class     => 'GPS::MTK::Parser',
         event_class      => 'GPS::MTK::Event',
 
+# Basic configuration
+        io_timeout       => 4,
+        io_send_reattempts => 3,
+
 # Some internal variables to track state
         gps_state        => {
             time_current => undef, # in localtime format
