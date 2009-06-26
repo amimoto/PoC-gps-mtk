@@ -20,6 +20,8 @@ use GPS::MTK::Base
             data_status  => undef,
             latitude     => undef,
             longitude    => undef,
+
+            log_data     => '',
         },
 
 # The files users will generally be paying with
@@ -79,6 +81,51 @@ sub gps_info {
 # How many trackpoints have we got filled?
     $self->gps_send_wait( 'PMTK182,2,10','PMTK182' );
     use Data::Dumper; die Dumper $self->{gps_state};
+}
+
+sub log_download {
+# --------------------------------------------------
+# Fetch the data from the logger if available
+#
+    my ( $self ) = @_;
+
+# We need information on the amount of data that this
+# GPS is currently using
+    my $gps_info = $self->gps_info;
+
+# That will allow us to guessestimate how many blocks of
+# data we need to download
+    my $mem_index = 0;
+    my $mem_chunk_max = '10000';
+
+# Need to clear the data from the current memory store 
+    $self->{gps_state}{log_data} = '';
+
+# turn logging off
+    $self->gps_send('PMTK182,5'); 
+
+# Now we will go in $mem_chunk sized chunks to 
+# retreive the data from the GPS device
+    while ( $mem_index < $gps_mem ) {
+
+# Send out the request for the log chunk
+        my $mem_chunk = $gps_mem - $mem_index;
+        if ( $mem_chunk > $mem_chunk_max ) { $mem_chunk = $mem_chunk_max };
+        $self->gps_send( sprintf("PMTK182,7,%x,%s",$mem_index,$mem_chunk) )
+
+# Then we look for the PMTK001,182,7,3 to acknowledge completion
+        $self->gps_wait(sub {
+        # --------------------------------------------------
+        # This will wait until the data has completed
+        #
+            my ($line,$self,$code) = @_;
+            $line =~ /pmtk001,182,7/i;
+        });
+
+# Increment the chunk and next
+
+    }
+
 }
 
 sub loop {
@@ -156,7 +203,7 @@ sub gps_wait {
         my @e = split /,/, $line;
         my $code = shift @e;
         $code =~ s/^\$//;
-        if ( $code eq $code_wait ) {
+        if ( ref $code_wait ? $code_wait->($line,$self,$code) : $code eq $code_wait ) {
             last;
         };
     };

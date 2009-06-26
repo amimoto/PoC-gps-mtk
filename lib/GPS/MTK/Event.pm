@@ -316,10 +316,26 @@ sub _event_gps_pmtk182 {
     my ($line,$self,$code,$elements) = @_;
     my $sc = $elements->[0]; # sc = subcommand
 
-# subcommand three is for responses to previous pmtk
+# subcommand 3 is for responses to previous pmtk
 # requests for information
-    if ( $sc == 3 ) {
+    if ( 3 == $sc ) {
         return _event_gps_pmtk182_subcomm3(@_);
+    }
+
+# subcommand 8 is for responses that hold log data
+# in hex format. 
+    elsif ( 8 == $sc ) {
+
+# PMTK182,8,00000000,6F... appears to be actual data
+#         offets:
+#                1 - code identifying data
+#                2 - offset off base of the first byte
+#                3 - the actual data
+
+# FIXME: make sure we handle the offset. Currently it merely
+# appends.
+        my $buf = pack "H*", $elements->[2];
+        $self->{gps_state}{log_data} .= $buf;
     }
 }
 
