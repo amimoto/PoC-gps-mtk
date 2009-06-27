@@ -47,9 +47,10 @@ sub gps_info {
     my ( $self ) = @_;
 
 # clear out any pending data
-    $self->loop; 
+    $self->loop;
 
-# This might be a reset?
+# Quick test
+    $self->gps_send( 'PMTK000', 'PMTK001' );
     $self->gps_send( 'PTSI1000,TSI' );
 
 # Figure out what type of device this is. NB the event
@@ -80,7 +81,9 @@ sub gps_info {
 
 # How many trackpoints have we got filled?
     $self->gps_send_wait( 'PMTK182,2,10','PMTK182' );
-    use Data::Dumper; die Dumper $self->{gps_state};
+
+# Ok done. Can return the result
+    return $self->{gps_state}{gps_info};
 }
 
 sub log_download {
@@ -96,22 +99,25 @@ sub log_download {
 # That will allow us to guessestimate how many blocks of
 # data we need to download
     my $mem_index = 0;
-    my $mem_chunk_max = '10000';
+    my $mem_chunk_max = 65536;
+    my $mem_size = $gps_info->{memory_used};
 
 # Need to clear the data from the current memory store 
     $self->{gps_state}{log_data} = '';
 
 # turn logging off
-    $self->gps_send('PMTK182,5'); 
+    $self->gps_send('PMTK182,5');
 
 # Now we will go in $mem_chunk sized chunks to 
 # retreive the data from the GPS device
-    while ( $mem_index < $gps_mem ) {
+    while ( $mem_index < $mem_size ) {
+
+        warn "LOOP: $mem_index / $mem_size\n";
 
 # Send out the request for the log chunk
-        my $mem_chunk = $gps_mem - $mem_index;
+        my $mem_chunk = $mem_size - $mem_index;
         if ( $mem_chunk > $mem_chunk_max ) { $mem_chunk = $mem_chunk_max };
-        $self->gps_send( sprintf("PMTK182,7,%x,%s",$mem_index,$mem_chunk) )
+        $self->gps_send( sprintf("PMTK182,7,%x,%x",$mem_index,$mem_chunk) );
 
 # Then we look for the PMTK001,182,7,3 to acknowledge completion
         $self->gps_wait(sub {
@@ -119,13 +125,36 @@ sub log_download {
         # This will wait until the data has completed
         #
             my ($line,$self,$code) = @_;
-            $line =~ /pmtk001,182,7/i;
+            warn ">>>$line<<<\n";
+            return $line =~ /pmtk001,182,7/i;
         });
 
 # Increment the chunk and next
-
+# FIXME: Need to check to see how much data the ode actually did transfer
+        $mem_index += $mem_chunk; 
     }
 
+# Theoretically, the log data should now be loaded!
+    return $self->{gps_state}{log_data};
+}
+
+sub log_parse {
+# --------------------------------------------------
+# Extracts the data from the binary dump that 
+# the device provides
+#
+    my $self = shift;
+    my $opts = {@_};
+
+# We load the data right into memory from the current dump if no 
+# options have been specified. However, users have the option
+# of reading the data from a file or an alternative buffer
+# as well as configuring the output so that it goes to a file,
+# another buffer, or triggers subroutine refs in event based 
+# fashion
+    my $data = {};
+
+    return $data;
 }
 
 sub loop {
@@ -144,7 +173,6 @@ sub loop {
         do {
             $line = $io_obj->getline();
             $line =~ s/[\n\r]*$//;
-
 # If there is an event, we just send it to the event 
 # engine as required.
             if ( $line ) {
@@ -152,7 +180,7 @@ sub loop {
                 $event_obj->event($line,$self);
             }
             elsif ( not $blocking ) {
-                last;
+                last FETCH_DATA;
             }
 
         } while ( defined $line );
@@ -172,8 +200,9 @@ sub gps_send {
     my $base_string = join ",", uc($code), @$elements;
     my $checksum    = GPS::MTK::NMEA->checksum($base_string);
     my $nmea_string = '$' . $base_string . "*$checksum\r\n";
+    warn "Send: $nmea_string\n";
     my $io_obj      = $self->io_obj or return;
-    return $io_obj->printflush($nmea_string);
+    return $io_obj->printflush($nmea_string) or die $!;
 }
 
 sub gps_wait {
@@ -203,7 +232,10 @@ sub gps_wait {
         my @e = split /,/, $line;
         my $code = shift @e;
         $code =~ s/^\$//;
-        if ( ref $code_wait ? $code_wait->($line,$self,$code) : $code eq $code_wait ) {
+        warn ">>> $code_wait\n";
+        if ( ref $code_wait ? $code_wait->($line,$self,$code)
+                            : $code eq $code_wait
+        ) {
             last;
         };
     };
