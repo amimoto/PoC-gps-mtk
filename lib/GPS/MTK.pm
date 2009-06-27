@@ -125,7 +125,6 @@ sub log_download {
         # This will wait until the data has completed
         #
             my ($line,$self,$code) = @_;
-            warn ">>>$line<<<\n";
             return $line =~ /pmtk001,182,7/i;
         });
 
@@ -213,7 +212,7 @@ sub gps_wait {
 
     my $io_obj    = $self->io_obj or return;
     my $event_obj = $self->event_obj or return;
-    $code_wait    = uc($code_wait);
+    ref $code_wait or $code_wait = uc($code_wait);
     my $line;
 
     $io_obj->blocking(1);
@@ -232,7 +231,6 @@ sub gps_wait {
         my @e = split /,/, $line;
         my $code = shift @e;
         $code =~ s/^\$//;
-        warn ">>> $code_wait\n";
         if ( ref $code_wait ? $code_wait->($line,$self,$code)
                             : $code eq $code_wait
         ) {
