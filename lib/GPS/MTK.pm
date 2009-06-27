@@ -117,7 +117,7 @@ sub log_download {
 # Send out the request for the log chunk
         my $mem_chunk = $mem_size - $mem_index;
         if ( $mem_chunk > $mem_chunk_max ) { $mem_chunk = $mem_chunk_max };
-        $self->gps_send( sprintf("PMTK182,7,%x,%x",$mem_index,$mem_chunk) );
+        $self->gps_send( sprintf("PMTK182,7,%X,%X",$mem_index,$mem_chunk) );
 
 # Then we look for the PMTK001,182,7,3 to acknowledge completion
         $self->gps_wait(sub {
