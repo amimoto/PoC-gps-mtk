@@ -14,7 +14,11 @@ sub main {
                     comm_port_fpath => '/dev/rfcomm4',
                     log_dump_fpath  => '/tmp/gps.log',
                 );
-    $gps->log_download;
+    my $buf = $gps->log_download();
+    open F, ">gpsdata.bin";
+    binmode F;
+    print F $buf;
+    close F;
 #    while (1) {
 #        $gps->loop(1);
 #    }

@@ -90,7 +90,15 @@ sub log_download {
 # --------------------------------------------------
 # Fetch the data from the logger if available
 #
-    my ( $self ) = @_;
+# Options that can be provided to this function are:
+#
+# progress => sub {
+#                    my ( $self, $percent_complete ) = @_;
+#                 }
+#
+#
+    my $self = shift;
+    my $opts = {@_};
 
 # We need information on the amount of data that this
 # GPS is currently using
@@ -104,15 +112,15 @@ sub log_download {
 
 # Need to clear the data from the current memory store 
     $self->{gps_state}{log_data} = '';
+    $self->{gps_state}{log_data_chunks} = [];
 
 # turn logging off
     $self->gps_send('PMTK182,5');
 
 # Now we will go in $mem_chunk sized chunks to 
 # retreive the data from the GPS device
+    my $progress_sub = $opt->{progress_sub};
     while ( $mem_index < $mem_size ) {
-
-        warn "LOOP: $mem_index / $mem_size\n";
 
 # Send out the request for the log chunk
         my $mem_chunk = $mem_size - $mem_index;
@@ -125,11 +133,39 @@ sub log_download {
         # This will wait until the data has completed
         #
             my ($line,$self,$code) = @_;
+            $progress_sub and $progress_sub->( $self, $mem_index );
             return $line =~ /pmtk001,182,7/i;
         });
 
+# Once we get here, we know that the GPS has (at least) attempted to fullfill our request.
+# We need to double check, however, that the chunk of data that we have downloaded
+# is complete. We assume that because of the checksum test before the data even
+# gets to the code that it's not corrupt. However, we need to figure out if the chunk of 
+# data that we have just downloaded is complete.
+        my $log_data_chunks = [ sort {$a->[0]<=>$b->[0]} $self->{gps_state}{log_data_chunks} ];
+        my $log_data_chunks_missing = [];
+
+# FIXME: array position should be a constant
+        my $chunk_i = $log_data_chunks->[0][0]; # set the index to the begining of the first chunk
+        for my $chunk ( @$log_data_chunks ) {
+
+# If the chunk offset is unexpected, we invalidate this chunk download and fetch a new set.
+# FIXME: This is a dirty way of doing it, because we probably have a lot more valid data
+# than broken chunks. Still, it's the easiest to code (for now) and understand. The only time 
+# I've ever had incomplete chunks is when I walked away from the computer with my GPS
+            if ( $chunk->[0] != $chunk_i ) {
+                $self->{gps_state}{gps_log_data_chunks} = []; # junk this chunk download
+                next;
+            }
+
+            $chunk_i += $chunk->[1]; # next offset
+        }
+
+# We have the complete set of data. Append it to the current buffer and continue on.
+# FIXME: array position should be a constant
+        $self->{gps_state}{log_data} .= join "", map {$_->[2]} @$log_data_chunks;
+
 # Increment the chunk and next
-# FIXME: Need to check to see how much data the ode actually did transfer
         $mem_index += $mem_chunk; 
     }
 

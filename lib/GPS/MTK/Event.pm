@@ -334,8 +334,11 @@ sub _event_gps_pmtk182 {
 
 # FIXME: make sure we handle the offset. Currently it merely
 # appends.
-        my $buf = pack "H*", $elements->[2];
-        $self->{gps_state}{log_data} .= $buf;
+        my $chunk_offset = hex( $elements->[1] );
+        my $chunk        = pack "H*", $elements->[2];
+        my $chunk_size   = length $chunk;
+
+        $self->{gps_state}{log_data_chunks} = [ $chunk_offset, $chunk_size, $chunk ];
     }
 }
 
