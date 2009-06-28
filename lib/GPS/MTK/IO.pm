@@ -3,11 +3,13 @@ package GPS::MTK::IO;
 use strict;
 use bytes;
 use IO::File;
+use IO::Select;
 use GPS::MTK::Base
     MTK_ATTRIBS => {
         comm_port_fpath  => '',
         buffer           => '',
         io_handle        => undef,
+        io_timeout       => 5,
     };
 
 sub connect {
@@ -33,6 +35,7 @@ sub blocking {
 #
     my ( $self, $blocking ) = @_;
     my $io_handle = $self->{io_handle} or return;
+    $self->{blocking} = $blocking;
     return $io_handle->blocking($blocking);
 }
 
@@ -53,7 +56,25 @@ sub getline {
 #
     my $self = shift;
     my $io_handle = $self->{io_handle} or return;
-    return ( $io_handle->getline || '' );
+
+# If blocking mode is on, we wait till we have
+# something to read
+    if ( $self->{blocking} ) {
+        IO::Select->new($io_handle)->can_read($self->{io_timeout});
+    }
+
+    my $l = $io_handle->getline || '';
+
+# We found a carriage return, let's get it and move on
+    if ( $l =~ /\n/ ) {
+        my $line = $self->{buffer} . $l;
+        $line =~ s/\r?\n(.*)$//;
+        $self->{buffer} = $1 || '';
+        return $line;
+    }
+
+    $self->{buffer} .= $l;
+    return '';
 }
 
 sub printflush {

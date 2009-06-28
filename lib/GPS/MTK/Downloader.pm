@@ -52,7 +52,7 @@ sub main {
     my $data_buffer = '';
     my $fh_o = Symbol::gensym();
     open $fh_o, ">output.bin";
-    binmode $fh_o;
+#    binmode $fh_o;
 
     while ( $mem_index < $gps_mem ) {
         packet_send(sprintf("PMTK182,7,%x,%s",$mem_index,$mem_chunk));

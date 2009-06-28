@@ -50,8 +50,17 @@ sub gps_info {
     $self->loop;
 
 # Quick test
-    $self->gps_send( 'PMTK000', 'PMTK001' );
+    $self->gps_send_wait( 'PMTK182,2,9,9F','PMTK182' );
     $self->gps_send( 'PTSI1000,TSI' );
+
+# How much memory do we have we filled?
+    $self->gps_send_wait( 'PMTK182,2,8','PMTK182' );
+
+# How many trackpoints have we got filled?
+    $self->gps_send_wait( 'PMTK182,2,10','PMTK182' );
+
+# What's the log's status
+    $self->gps_send_wait( 'PMTK182,2,7','PMTK182' );
 
 # Figure out what type of device this is. NB the event
 # handler located atGPS::MTK::Event::_event_gps_pmtk705 
@@ -72,15 +81,6 @@ sub gps_info {
 
 # What's the recording method
     $self->gps_send_wait( 'PMTK182,2,6','PMTK182' );
-
-# What's the log's status
-    $self->gps_send_wait( 'PMTK182,2,7','PMTK182' );
-
-# How much memory do we have we filled?
-    $self->gps_send_wait( 'PMTK182,2,8','PMTK182' );
-
-# How many trackpoints have we got filled?
-    $self->gps_send_wait( 'PMTK182,2,10','PMTK182' );
 
 # Ok done. Can return the result
     return $self->{gps_state}{gps_info};
@@ -157,6 +157,7 @@ sub log_download {
         my $chunk_i = $log_data_chunks->[0][0]; # set the index to the begining of the first chunk
         for my $chunk ( @$log_data_chunks ) {
 
+warn "CHUNK: $chunk->[0] - $chunk->[1]\n";
 # If the chunk offset is unexpected, we invalidate this chunk download and fetch a new set.
 # FIXME: This is a dirty way of doing it, because we probably have a lot more valid data
 # than broken chunks. Still, it's the easiest to code (for now) and understand. The only time 
@@ -242,10 +243,10 @@ sub gps_send {
     my $code        = shift @$elements;
     my $base_string = join ",", uc($code), @$elements;
     my $checksum    = GPS::MTK::NMEA->checksum($base_string);
-    my $nmea_string = '$' . $base_string . "*$checksum\r\n";
-    warn "Send: $nmea_string\n";
+    my $nmea_string = '$' . $base_string . "*$checksum";
+    $self->nmea_string_log( "Send: $nmea_string" );
     my $io_obj      = $self->io_obj or return;
-    return $io_obj->printflush($nmea_string) or die $!;
+    return $io_obj->printflush($nmea_string."\r\n") or die $!;
 }
 
 sub gps_wait {
@@ -261,6 +262,7 @@ sub gps_wait {
 
     $io_obj->blocking(1);
     while (1) {
+    print ".";
         $line = $io_obj->getline();
         defined $line or last;
         $line =~ s/[\n\r]*$//;
