@@ -338,7 +338,7 @@ sub _event_gps_pmtk182 {
         my $chunk        = pack "H*", $elements->[2];
         my $chunk_size   = length $chunk;
 
-        $self->{gps_state}{log_data_chunks} = [ $chunk_offset, $chunk_size, $chunk ];
+        push @{$self->{gps_state}{log_data_chunks}}, [ $chunk_offset, $chunk_size, $chunk ];
     }
 }
 
