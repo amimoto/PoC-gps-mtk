@@ -11,6 +11,7 @@ sub main {
 # --------------------------------------------------
 
     my $gps = GPS::MTK->new( 
+#                    comm_port_fpath => '/dev/ttyUSB0',
                     comm_port_fpath => '/dev/rfcomm4',
                     log_dump_fpath  => '/tmp/gps.log',
                 );

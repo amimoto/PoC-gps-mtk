@@ -59,11 +59,14 @@ sub getline {
 
 # If blocking mode is on, we wait till we have
 # something to read
+    my $l;
     if ( $self->{blocking} ) {
         IO::Select->new($io_handle)->can_read($self->{io_timeout});
+        $l = <$io_handle>;
     }
-
-    my $l = $io_handle->getline || '';
+    else {
+        $l = $io_handle->getline || '';
+    }
 
 # We found a carriage return, let's get it and move on
     if ( $l =~ /\n/ ) {

@@ -50,7 +50,7 @@ sub gps_info {
     $self->loop;
 
 # Quick test
-    $self->gps_send_wait( 'PMTK182,2,9,9F','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,9,9F','PMTK001' );
     $self->gps_send( 'PTSI1000,TSI' );
 
 # How much memory do we have we filled?
