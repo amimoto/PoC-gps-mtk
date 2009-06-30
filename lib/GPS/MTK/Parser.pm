@@ -5,6 +5,13 @@ use bytes;
 use Symbol;
 use GPS::MTK;
 use GPS::MTK::Constants qw/:all/;
+use GPS::MTK::Base
+    MTK_ATTRIBS => {
+        fpath_out => '',
+        path_out  => '',
+        fname_out => '',
+        fh_out    => undef,
+    };
 
 ###################################################
 # Main code follows
