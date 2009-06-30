@@ -135,6 +135,7 @@ sub _event_default {
 #
     my ($line,$cb_args,$code,$elements) = @_;
     print "$code => [$line]\n";
+    return 1;
 }
 
 sub _event_error {
@@ -143,6 +144,7 @@ sub _event_error {
 #
     my ($line,$cb_args,$error_msg) = @_;
     warn "$line\n    - $error_msg\n";
+    return 1;
 }
 
 # Lots of data on how nmea strings work here:
@@ -187,7 +189,7 @@ sub _event_gps_gprmc {
     my $gps_state = $self->{gps_state};
     @$gps_state{keys %$gps_state_new} = values %$gps_state_new;
 
-    return;
+    return 1;
 }
 
 sub _event_gps_gpgga {
@@ -229,7 +231,7 @@ sub _event_gps_gpgga {
     my $gps_state = $self->{gps_state};
     @$gps_state{keys %$gps_state_new} = values %$gps_state_new;
 
-    return;
+    return 1;
 }
 
 sub _event_gps_gpgsa {
@@ -259,7 +261,7 @@ sub _event_gps_gpgsa {
     my $gps_state = $self->{gps_state};
     @$gps_state{keys %$gps_state_new} = values %$gps_state_new;
 
-    return;
+    return 1;
 }
 
 sub _event_gps_gpgsv {
@@ -290,7 +292,7 @@ sub _event_gps_gpgsv {
     };
     @$gps_state{keys %$gps_state_new} = values %$gps_state_new;
 
-    return;
+    return 1;
 }
 
 sub _event_gps_pmtk001 {
@@ -303,6 +305,8 @@ sub _event_gps_pmtk001 {
 #
     my ($line,$self,$code,$elements) = @_;
     my $sc = $elements->[1]; # sc = subcommand
+
+    return 1;
 }
 
 sub _event_gps_pmtk182 {
@@ -340,6 +344,8 @@ sub _event_gps_pmtk182 {
 
         push @{$self->{gps_state}{log_data_chunks}}, [ $chunk_offset, $chunk_size, $chunk ];
     }
+
+    return 1;
 }
 
 sub _event_gps_pmtk182_subcomm3 {
@@ -387,6 +393,8 @@ sub _event_gps_pmtk182_subcomm3 {
     elsif ( PMTK182_PARAM_POINTS_COUNT == $cmd_type ) {
         $gps_info->{points_count} = hex($elements->[2]);
     }
+
+    return 1;
 }
 
 sub _event_gps_pmtk705 {
@@ -404,7 +412,7 @@ sub _event_gps_pmtk705 {
     $gps_info->{model_id} = shift @$elements;
     $gps_info->{device} = join " ", @$elements;
 
-    return;
+    return 1;
 }
 
 1;

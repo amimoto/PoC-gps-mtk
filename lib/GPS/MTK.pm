@@ -54,13 +54,13 @@ sub gps_info {
     $self->gps_send( 'PTSI1000,TSI' );
 
 # How much memory do we have we filled?
-    $self->gps_send_wait( 'PMTK182,2,8','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,8','PMTK182,3,8' );
 
 # How many trackpoints have we got filled?
-    $self->gps_send_wait( 'PMTK182,2,10','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,10','PMTK182,3,10' );
 
 # What's the log's status
-    $self->gps_send_wait( 'PMTK182,2,7','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,7','PMTK182,3,7' );
 
 # Figure out what type of device this is. NB the event
 # handler located atGPS::MTK::Event::_event_gps_pmtk705 
@@ -68,19 +68,19 @@ sub gps_info {
     $self->gps_send_wait( 'PMTK605', 'PMTK705' );
 
 # What's the log format
-    $self->gps_send_wait( 'PMTK182,2,2','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,2','PMTK182,3,2' );
 
 # What's the time interval
-    $self->gps_send_wait( 'PMTK182,2,3','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,3','PMTK182,3,3' );
 
 # What's the distance interval
-    $self->gps_send_wait( 'PMTK182,2,4','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,4','PMTK182,3,4' );
 
 # What's the speed interval
-    $self->gps_send_wait( 'PMTK182,2,5','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,5','PMTK182,3,5' );
 
 # What's the recording method
-    $self->gps_send_wait( 'PMTK182,2,6','PMTK182' );
+    $self->gps_send_wait( 'PMTK182,2,6','PMTK182,3,6' );
 
 # Ok done. Can return the result
     return $self->{gps_state}{gps_info};
@@ -115,7 +115,7 @@ sub log_download {
     $self->{gps_state}{log_data_chunks} = [];
 
 # turn logging off
-    $self->gps_send('PMTK182,5');
+    $self->gps_send_wait('PMTK182,5','PMTK001,182,5,3');
 
 # Now we will go in $mem_chunk sized chunks to 
 # retreive the data from the GPS device
@@ -143,7 +143,7 @@ sub log_download {
                 $progress_sub->( $self, $current_bytes, $mem_size);
             };
             return $line =~ /pmtk001,182,7/i;
-        });
+        },{ io_timeout => 30 });
 
 # Once we get here, we know that the GPS has (at least) attempted to fullfill our request.
 # We need to double check, however, that the chunk of data that we have downloaded
@@ -154,21 +154,23 @@ sub log_download {
         my $log_data_chunks_missing = [];
 
 # FIXME: array position should be a constant
-        my $chunk_i = $log_data_chunks->[0][0]; # set the index to the begining of the first chunk
+        my $chunk_i  = $log_data_chunks->[0][0]; # set the index to the begining of the first chunk
+        my $chunk_ok = 1;
         for my $chunk ( @$log_data_chunks ) {
 
-warn "CHUNK: $chunk->[0] - $chunk->[1]\n";
 # If the chunk offset is unexpected, we invalidate this chunk download and fetch a new set.
 # FIXME: This is a dirty way of doing it, because we probably have a lot more valid data
 # than broken chunks. Still, it's the easiest to code (for now) and understand. The only time 
 # I've ever had incomplete chunks is when I walked away from the computer with my GPS
             if ( $chunk->[0] != $chunk_i ) {
                 $self->{gps_state}{log_data_chunks} = []; # junk this chunk download
-                next;
+                $chunk_ok = 0; # chunk is NOT okay
+                last;
             }
 
             $chunk_i += $chunk->[1]; # next offset
         }
+        if ( not $chunk_ok ) { next }; # try again if the chunk is bad
 
 # We have the complete set of data. Append it to the current buffer and continue on.
 # FIXME: array position should be a constant
@@ -255,16 +257,19 @@ sub gps_wait {
 # --------------------------------------------------
 # This will block until the requested code is found
 #
-    my ( $self, $code_wait ) = @_;
+    my ( $self, $code_wait, $opts ) = @_;
 
+    $opts ||= {};
     my $io_obj    = $self->io_obj or return;
     my $event_obj = $self->event_obj or return;
     ref $code_wait or $code_wait = uc($code_wait);
     my $line;
 
     $io_obj->blocking(1);
+    my $start_tics = time;
+    my $end_tics   = $opts->{io_timeout} ? time + $opts->{io_timeout}  : 
+                     $self->{io_timeout} ? time + $self->{io_timeout} : 0;
     while (1) {
-    print ".";
         $line = $io_obj->getline();
         defined $line or last;
         $line =~ s/[\n\r]*$//;
@@ -279,11 +284,19 @@ sub gps_wait {
         my @e = split /,/, $line;
         my $code = shift @e;
         $code =~ s/^\$//;
+        my $cmp_line = $line;
+        $cmp_line =~ s/^\$//;
         if ( ref $code_wait ? $code_wait->($line,$self,$code)
-                            : $code eq $code_wait
+                            : $cmp_line =~ /^$code_wait/
         ) {
             last;
         };
+
+# Doesn't match. Let's just see if we've gone past the io timeout wait
+        if ( $end_tics and time >= $end_tics ) {
+            return;
+        }
+
     };
 
     return 1;
@@ -297,9 +310,21 @@ sub gps_send_wait {
 #
     my ( $self, $elements, $code_wait, $callback ) = @_;
     my $event_obj = $self->event_obj or return;
-    $self->gps_send( $elements );
     $callback and $event_obj->hook_register( $code_wait, $callback );
-    $self->gps_wait($code_wait);
+    my $reattempts = $self->{io_send_reattempts} || 0; 
+    while (1) {
+        $self->gps_send( $elements );
+        $self->gps_wait($code_wait) and last;
+
+# Retry if we failed. gps_wait is only true if we managed to wait
+# successfully for the wait code
+        if ( $reattempts-- ) {
+            next;
+        }
+        else {
+            die "Could not receive response desired";
+        }
+    };
     $callback and $event_obj->hook_unregister( $code_wait );
     return 1;
 }
