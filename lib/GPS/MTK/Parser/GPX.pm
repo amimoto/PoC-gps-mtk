@@ -7,7 +7,7 @@ use GPS::MTK;
 use GPS::MTK::Constants qw/:all/;
 use GPS::MTK::Parser;
 
-@ISA = 'GPS::MTK::Parser::GPX';
+@ISA = 'GPS::MTK::Parser';
 
 
 sub log_separator_handler {
@@ -19,8 +19,10 @@ sub log_separator_handler {
 sub log_entry_handler {
 # --------------------------------------------------
     my ( $self, $entry_info, $header_info ) = @_;
+    use Data::Dumper; die Dumper $self;
 
     printf "%s,%0.05f,%0.05f\n", "".gmtime($entry_info->{utc}), @$entry_info{qw(latitude longitude)};
 }
+
 
 1;

@@ -8,7 +8,6 @@
 
 use strict;
 use lib 'lib';
-use GPS::MTK::Parser;
 use Symbol;
 
 ###################################################
@@ -22,6 +21,7 @@ sub main {
     my $fpath = shift or die "No data file provided!";
     -f $fpath or die "Require path to data file";
 
-    GPS::MTK::Parser->parse( $fpath );
+    require GPS::MTK::Parser::GPX;
+    GPS::MTK::Parser::GPX->parse( $fpath );
 }
 
