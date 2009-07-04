@@ -5,6 +5,11 @@ use bytes;
 use Symbol;
 use GPS::MTK;
 use GPS::MTK::Constants qw/:all/;
+use GPS::MTK::Base
+    MTK_ATTRIBS => {
+        fpath_out => '',
+        fh_out    => undef,
+    };
 
 ###################################################
 # Main code follows
@@ -13,7 +18,8 @@ use GPS::MTK::Constants qw/:all/;
 sub parse {
 # --------------------------------------------------
     my $self = shift;
-    my $fpath = shift or die "No data file provided!";
+    ref $self or $self = $self->new;
+    my $fpath = shift || $self->{fpath_out} or die "No data file provided!";
     -f $fpath or die "Require path to data file";
 
 # Get a fix on the data file
@@ -33,7 +39,7 @@ sub parse {
         my $header_info_buf = substr $block_buf, $b_i, LOG_HEADER_INFO_SIZE; $b_i += LOG_HEADER_INFO_SIZE;
         my $header_info = $self->log_parse_header( $header_info_buf );
 
-# Sector status we don't know how to handle so this is just a stub.
+# Sector status: we don't know how to handle so this is just a stub.
         my $sector_info_buf = substr $block_buf, $b_i, LOG_SECTOR_INFO_SIZE; $b_i += LOG_SECTOR_INFO_SIZE;
         my $sector_info = $self->log_parse_sector( $sector_info_buf );
 
@@ -53,12 +59,26 @@ sub parse {
 
 # Now we can handle the data from the header. The log chunk can be
 # either a single point or a record of a log attribute being changed.
-        while ( $b_i < $block_buf_len ) {
+# In the logs, each track is separated by an event such as power cycling
+# or changing the logging parameters. After every separator we encounter, we
+# see if we end up with a new filepath. Every new filepath corresponds to a 
+# new file  This allows us to create a new file for every new track
+# or consolidate all tracks into a single file. It's just a matter of how
+# the subclass behaves... yay!
+    my $state = {
+        fpath_fh      => undef,
+    };
+    while ( $b_i < $block_buf_len ) {
             if ( my $entry_separator = $self->log_parse_entry_separator(\$block_buf,\$b_i,$header_info) ) {
-                $self->log_separator_handler($entry_separator,$header_info);
+                $state->{fpath_fh} = $self->log_separator_handler($state_info,$entry_separator,$header_info);
+                $self->log_fpath_close($state_info,$entry_info,$header_info);
             }
             else {
                 my $entry_info = $self->log_parse_entry(\$block_buf,\$b_i,$header_info);
+                if ( not $state->{fpath_fh} ) {
+                    my $fpath_new = $self->log_fpath($state_info,$entry_info,$header_info);
+                    $state->{fpath_fh} = $self->log_fpath_open($fpath_new,$state_info,$entry_info,$header_info);
+                }
                 $self->log_entry_handler($entry_info,$header_info);
             }
         }
@@ -68,6 +88,45 @@ sub parse {
     }
 
     close $fh;
+}
+
+###################################################
+# Log file managers
+###################################################
+
+sub log_fpath {
+# --------------------------------------------------
+# This returns a new filename if there is any
+#
+    my ( $self, $header_info ) = @_;
+    my $fpath = $self->{fpath_out} or return;
+
+# The fpath can be of eithr a string format or a subroutine
+# if it's a subroutine, the subroutine is expected to return the
+# new filename. if it returns a non-true value, we assume
+# that the function has failed
+    $fpath = ref $fpath eq 'CODE' ? $fpath->($self,$header_info) : $fpath;
+
+    return $fpath;
+}
+
+sub log_fpath_open {
+# --------------------------------------------------
+# Given the filename and header informnation, this 
+# function will open the path for writing, create the header 
+# required for the upcoming data
+#
+    my ($self,$header_info) = @_;
+}
+
+sub log_fpath_close {
+# --------------------------------------------------
+# This will be called when the file is no longer
+# required. At this point either the track or the
+# track segment has completed. The footer can be added to the
+# output at this point
+#
+    my ($self,$header_info) = @_;
 }
 
 ###################################################
@@ -83,7 +142,6 @@ sub log_separator_handler {
 sub log_entry_handler {
 # --------------------------------------------------
     my ( $self, $entry_info, $header_info ) = @_;
-
     printf "%s,%0.05f,%0.05f\n", "".gmtime($entry_info->{utc}), @$entry_info{qw(latitude longitude)};
 }
 

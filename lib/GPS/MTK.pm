@@ -7,7 +7,7 @@ use GPS::MTK::Base
 # Driver based handling of IO and parsing
         io_class         => 'GPS::MTK::IO',
         downloader_class => 'GPS::MTK::Downloader',
-        parser_class     => 'GPS::MTK::Parser',
+        parser_class     => 'GPS::MTK::Parser::GPS',
         event_class      => 'GPS::MTK::Event',
 
 # Basic configuration
@@ -189,7 +189,7 @@ sub log_parse {
 # Extracts the data from the binary dump that 
 # the device provides
 #
-    my $self = shift;
+    my ($self,$fpath) = splice @_, 0, 2;
     my $opts = {@_};
 
 # We load the data right into memory from the current dump if no 
@@ -199,6 +199,8 @@ sub log_parse {
 # another buffer, or triggers subroutine refs in event based 
 # fashion
     my $data = {};
+    my $parser_obj = $self->parser_obj;
+    $parser_obj->parse($fpath);
 
     return $data;
 }
