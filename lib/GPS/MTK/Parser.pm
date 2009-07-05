@@ -87,10 +87,12 @@ sub parse {
 
 # Setup for next chunk
         $fh_read += LOG_BLOCK_SIZE;
-
-# We will ensure that the log file is closed
-        $self->log_fpath_close($state,undef,$header_info);
     }
+
+# We will ensure that the log file is closed. Note that the
+# $entry_separator value is undef'd to indicate that there really is no more
+# data.
+    $self->log_fpath_close($state,undef,undef);
 
     close $fh;
 }
