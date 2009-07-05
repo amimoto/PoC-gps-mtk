@@ -115,7 +115,7 @@ sub log_download {
     $self->{gps_state}{log_data_chunks} = [];
 
 # turn logging off
-    $self->gps_send_wait('PMTK182,5','PMTK001,182,5,3');
+    $self->gps_send_wait('PMTK182,5','PMTK001,182,5');
 
 # Now we will go in $mem_chunk sized chunks to 
 # retreive the data from the GPS device
@@ -322,7 +322,7 @@ sub gps_send_wait {
             next;
         }
         else {
-            die "Could not receive response desired";
+            die "Could not receive response <$code_wait> desired";
         }
     };
     $callback and $event_obj->hook_unregister( $code_wait );
@@ -430,7 +430,7 @@ sub nmea_string_log {
     return unless $self->{log_dump_fpath};
     require Symbol;
     my $fh = Symbol::gensym();
-    open $fh, ">>$self->{log_dump_fpath}";
+    open $fh, ">>$self->{log_dump_fpath}" or die $!;
     print $fh "$line\n";
     close $fh;
 }

@@ -10,13 +10,13 @@ use GPS::MTK::Parser;
 @ISA = 'GPS::MTK::Parser';
 
 
-sub log_separator_handler {
+sub log_separator_handler3 {
 # --------------------------------------------------
     my ( $self, $entry_separator, $header_info ) = @_;
     print "------------- Seperator ----\n";
 }
 
-sub log_entry_handler {
+sub log_entry_handler2 {
 # --------------------------------------------------
     my ( $self, $entry_info, $header_info ) = @_;
     use Data::Dumper; die Dumper $self;

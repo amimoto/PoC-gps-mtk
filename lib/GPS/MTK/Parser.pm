@@ -7,7 +7,7 @@ use GPS::MTK;
 use GPS::MTK::Constants qw/:all/;
 use GPS::MTK::Base
     MTK_ATTRIBS => {
-        fpath_out => '',
+        fpath_out => '%Y-%M-%D_%h:%m:%s.csv',
         fh_out    => undef,
     };
 
@@ -29,6 +29,11 @@ sub parse {
 
 # Go in block chunks
     my $fh_read = 0;
+    my $state = {
+        fpath_current => undef,
+        fpath_fh      => undef,
+    };
+
     while ( $fh_read < $fh_size ) {
 
 # Load a block in
@@ -65,26 +70,26 @@ sub parse {
 # new file  This allows us to create a new file for every new track
 # or consolidate all tracks into a single file. It's just a matter of how
 # the subclass behaves... yay!
-    my $state = {
-        fpath_fh      => undef,
-    };
-    while ( $b_i < $block_buf_len ) {
+        while ( $b_i < $block_buf_len ) {
             if ( my $entry_separator = $self->log_parse_entry_separator(\$block_buf,\$b_i,$header_info) ) {
-                $state->{fpath_fh} = $self->log_separator_handler($state_info,$entry_separator,$header_info);
-                $self->log_fpath_close($state_info,$entry_info,$header_info);
+                $state->{fpath_fh} = $self->log_separator_handler($state,$entry_separator,$header_info);
+                $self->log_fpath_close($state,$entry_separator,$header_info);
             }
             else {
                 my $entry_info = $self->log_parse_entry(\$block_buf,\$b_i,$header_info);
                 if ( not $state->{fpath_fh} ) {
-                    my $fpath_new = $self->log_fpath($state_info,$entry_info,$header_info);
-                    $state->{fpath_fh} = $self->log_fpath_open($fpath_new,$state_info,$entry_info,$header_info);
+                    my $fpath_new = $state->{fpath_current} = $self->log_fpath($state,$entry_info,$header_info) or return;
+                    $state->{fpath_fh} = $self->log_fpath_open($fpath_new,$state,$entry_info,$header_info);
                 }
-                $self->log_entry_handler($entry_info,$header_info);
+                $self->log_entry_handler($state,$entry_info,$header_info);
             }
         }
 
 # Setup for next chunk
         $fh_read += LOG_BLOCK_SIZE;
+
+# We will ensure that the log file is closed
+        $self->log_fpath_close($state,undef,$header_info);
     }
 
     close $fh;
@@ -98,14 +103,28 @@ sub log_fpath {
 # --------------------------------------------------
 # This returns a new filename if there is any
 #
-    my ( $self, $header_info ) = @_;
+    my ( $self, $state, $entry_info, $header_info ) = @_;
     my $fpath = $self->{fpath_out} or return;
 
-# The fpath can be of eithr a string format or a subroutine
+    my @d = localtime($entry_info->{utc});
+    $d[5] += 1900;
+    $d[4] += 1;
+
+# The fpath can be of either a string format or a subroutine
 # if it's a subroutine, the subroutine is expected to return the
 # new filename. if it returns a non-true value, we assume
 # that the function has failed
     $fpath = ref $fpath eq 'CODE' ? $fpath->($self,$header_info) : $fpath;
+    my $replace = {
+        h => sprintf( '%02i', $d[2] ),
+        m => sprintf( '%02i', $d[1] ),
+        s => sprintf( '%02i', $d[0] ),
+        D => sprintf( '%02i', $d[3] ),
+        M => sprintf( '%02i', $d[4] ),
+        Y => sprintf( '%04i', $d[5] ),
+      '%' => '%',
+    };
+    $fpath =~ s/\%(.)/$replace->{$1}/g;
 
     return $fpath;
 }
@@ -116,7 +135,18 @@ sub log_fpath_open {
 # function will open the path for writing, create the header 
 # required for the upcoming data
 #
-    my ($self,$header_info) = @_;
+    my ($self,$fpath_new,$state,$entry_info,$header_info) = @_;
+
+# This will create a CSV for us to play with
+    my $headers = $header_info->{log_format_elements};
+
+    my $fh = Symbol::gensym();
+    open $fh, ">$fpath_new";
+
+    my $header_buf = join ",", @{$header_info->{log_format_elements}};
+    print $fh $header_buf, "\n";
+
+    return $fh;
 }
 
 sub log_fpath_close {
@@ -126,7 +156,7 @@ sub log_fpath_close {
 # track segment has completed. The footer can be added to the
 # output at this point
 #
-    my ($self,$header_info) = @_;
+    my ($self,$state,$entry_separator,$header_info) = @_;
 }
 
 ###################################################
@@ -135,14 +165,17 @@ sub log_fpath_close {
 
 sub log_separator_handler {
 # --------------------------------------------------
-    my ( $self, $entry_separator, $header_info ) = @_;
-    print "------------- Seperator ----\n";
+    my ( $self, $state, $entry_separator, $header_info ) = @_;
+    return $state->{fpath_fh};
 }
 
 sub log_entry_handler {
 # --------------------------------------------------
-    my ( $self, $entry_info, $header_info ) = @_;
-    printf "%s,%0.05f,%0.05f\n", "".gmtime($entry_info->{utc}), @$entry_info{qw(latitude longitude)};
+    my ( $self, $state, $entry_info, $header_info ) = @_;
+
+    my $fh  = $state->{fpath_fh};
+    my $entry_buf = join ",", @$entry_info{@{$header_info->{log_format_elements}}};
+    print $fh $entry_buf, "\n";
 }
 
 ###################################################
