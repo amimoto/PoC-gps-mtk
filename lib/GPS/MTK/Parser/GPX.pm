@@ -20,6 +20,7 @@ sub log_fpath_open {
 
 # This will create a GPX file for us to play with
     my $headers = $header_info->{log_format_elements};
+    $state->{track_segment_count} = 0;
 
 # Open the file deposit the header...
     my $fh = Symbol::gensym();
@@ -53,7 +54,6 @@ sub log_fpath_close {
     if ( $state->{track_segment_started} ) {
         print  $fh qq`</trkseg>\n</trk>\n`;
         $state->{track_segment_started} = 0;
-        $state->{track_segment_count} = 0;
         $state->{track_point_count} = 0;
     }
 
@@ -64,7 +64,7 @@ sub log_fpath_close {
     print $fh qq`
 </gpx>
 `;
-    
+
 }
 
 sub log_entry_handler {
