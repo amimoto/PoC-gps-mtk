@@ -1,15 +1,16 @@
-package GPS::MTK::Parser::GPX;
+package GPS::MTK::Generator::GPX;
 
 use strict;
 use bytes;
 use vars qw/ @ISA $MTK_ATTRIBS /;
 use GPS::MTK;
 use GPS::MTK::Constants qw/:all/;
-use GPS::MTK::Parser;
+use GPS::MTK::Generator;
 
-@ISA = 'GPS::MTK::Parser';
+@ISA = 'GPS::MTK::Generator';
 $MTK_ATTRIBS = {
     fpath_out => '%Y-%M-%D_%h:%m:%s.gpx',
+    multiple  => 1,
 };
 
 sub log_fpath_open {
@@ -30,7 +31,7 @@ sub log_fpath_open {
     print $fh qq`<?xml version="1.0"?>
 <gpx
 version="1.0"
-creator="ExpertGPS 1.1 - http://www.topografix.com"
+creator="GPS::MTK"
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 xmlns="http://www.topografix.com/GPX/1/0"
 xsi:schemaLocation="http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd">
@@ -57,7 +58,7 @@ sub log_fpath_close {
         $state->{track_point_count} = 0;
     }
 
-    if ( $entry_separator ) {
+    if ( $entry_separator and not $self->{multiple} ) {
         return;
     };
 
@@ -65,6 +66,7 @@ sub log_fpath_close {
 </gpx>
 `;
 
+    close delete $state->{fpath_fh};
 }
 
 sub log_entry_handler {

@@ -7,7 +7,7 @@ use GPS::MTK::Base
 # Driver based handling of IO and parsing
         io_class         => 'GPS::MTK::IO',
         downloader_class => 'GPS::MTK::Downloader',
-        parser_class     => 'GPS::MTK::Parser::GPS',
+        parser_class     => 'GPS::MTK::Generator::GPS',
         event_class      => 'GPS::MTK::Event',
 
 # Basic configuration

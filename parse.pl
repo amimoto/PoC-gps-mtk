@@ -21,7 +21,8 @@ sub main {
     my $fpath = shift or die "No data file provided!";
     -f $fpath or die "Require path to data file";
 
-    require GPS::MTK::Parser::GPX;
-    GPS::MTK::Parser::GPX->parse( $fpath );
+    require GPS::MTK::Generator::GPX;
+    my $generator = GPS::MTK::Generator::GPX->new;
+    $generator->parse( $fpath );
 }
 

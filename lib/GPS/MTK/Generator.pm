@@ -1,4 +1,4 @@
-package GPS::MTK::Parser;
+package GPS::MTK::Generator;
 
 use strict;
 use bytes;
